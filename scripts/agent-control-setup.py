@@ -678,18 +678,42 @@ def seed_demo_data(profile: dict[str, Any], dry_run: bool, force: bool = False) 
     )
 
 
+def _agents_config_is_placeholder(path: Path) -> bool:
+    """True, wenn agents.json noch die neutralen Public-Build-Platzhalter traegt.
+
+    Nur dann darf das Setup sie ohne force ueberschreiben. So bekommt ein frischer
+    Kunde seinen Namen in die Laufzeit-Quelle, eine bereits personalisierte Datei
+    (eigener Agent-/Inhaber-Name) bleibt aber geschuetzt.
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    owner_name = (data.get("owner") or {}).get("name")
+    agents = data.get("agents") or {}
+    agent_names = {(a or {}).get("name") for a in agents.values()}
+    return owner_name in (None, "", "Team") and agent_names.issubset({None, "", "Agent"})
+
+
 def write_agents_config(answers: dict[str, str], dry_run: bool, force: bool = False) -> None:
     """Schreibt config/agents.json mit dem im Setup vergebenen Agent-Namen.
 
     Diese Datei ist die Laufzeit-Quelle fuer den sichtbaren Agent-Namen
     (Backend /api/agents -> Frontend). Default-Platzhalter ist "Agent", damit
-    ein frischer Public-Build neutral startet. Wird nur angelegt, wenn noch
-    keine agents.json existiert (force ueberschreibt).
+    ein frischer Public-Build neutral startet.
+
+    Der Public-Build liefert bereits eine neutrale agents.json (Agent/Team) mit.
+    Wuerden wir bei vorhandener Datei einfach abbrechen, landete der im Setup
+    vergebene Name nie in der Laufzeit-Quelle und der Chat begruesste weiter mit
+    dem Platzhalter. Darum ueberschreiben wir auch, wenn die vorhandene Datei
+    noch der neutrale Platzhalter ist. Eine bereits angepasste agents.json (z. B.
+    des Nutzers) bleibt unberuehrt, ausser force ist gesetzt.
     """
-    if AGENTS_CONFIG_PATH.exists() and not force:
-        return
     agent_name = answers.get("agent_name") or "Agent"
     owner_name = answers.get("owner_name") or "Team"
+    if AGENTS_CONFIG_PATH.exists() and not force:
+        if not _agents_config_is_placeholder(AGENTS_CONFIG_PATH):
+            return
     config = {
         "active": "main",
         "owner": {"name": owner_name},
