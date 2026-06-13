@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowUp, Hammer, X, ChevronUp, ChevronDown as ChevronDownIcon, Plus, Search, Eye, Pencil, Archive, ArchiveRestore, Square, FileText, Paperclip, ClipboardPaste, Play, Pause, Check, Globe, Bot, ListChecks, type LucideIcon } from 'lucide-react'
-import { getAllAgentsIncludingHidden, getDefaultEngine, type Engine } from '../agents'
+import { getAllAgentsIncludingHidden, getDefaultEngine, useOwnerFirstName, type Engine } from '../agents'
 import { Chat, markTypewriterRead, buildTallyItems, fmtDur } from './Chat'
 import { Composer, type Attachment } from './Composer'
 import * as audioQueue from '../audioQueue'
@@ -51,16 +51,22 @@ interface PendingVisualDone {
   responseText: string
 }
 
-const EMPTY_GREETINGS = [
-  'Hey Christian, wie kann ich dir helfen?',
-  'Hey, was machen wir jetzt?',
-  'Hey, was gibt es Neues?',
-  'Wobei kann ich dir helfen?',
-  'Hey, woran arbeiten wir?',
-  'Hey Christian, was steht an?',
-  'Worauf hast du Lust?',
-  'Was können wir jetzt angehen?',
-]
+// Begruessungen werden mit dem Inhaber-Vornamen aus config/agents.json gebaut.
+// Ohne gesetzten Namen bleiben die neutralen Varianten ohne Anrede.
+function buildGreetings(firstName: string): string[] {
+  const named = firstName.trim()
+  const withName = (greeting: string) => named ? greeting.replace('{name}', named) : ''
+  return [
+    withName('Hey {name}, wie kann ich dir helfen?'),
+    'Hey, was machen wir jetzt?',
+    'Hey, was gibt es Neues?',
+    'Wobei kann ich dir helfen?',
+    'Hey, woran arbeiten wir?',
+    withName('Hey {name}, was steht an?'),
+    'Worauf hast du Lust?',
+    'Was können wir jetzt angehen?',
+  ].filter(Boolean)
+}
 
 function defaultModelForEngine(next: Engine): string {
   return next === 'codex' ? 'gpt-5.5' : 'claude-opus-4-8'
@@ -76,7 +82,11 @@ function normalizeModelForEngine(next: Engine, raw?: string): string {
 }
 
 function EmptyGreeting() {
-  const [greeting] = useState(() => EMPTY_GREETINGS[Math.floor(Math.random() * EMPTY_GREETINGS.length)])
+  const ownerFirst = useOwnerFirstName()
+  // Index einmal fest waehlen, Anzeige folgt dem (evtl. spaeter geladenen) Namen.
+  const [idx] = useState(() => Math.floor(Math.random() * 8))
+  const greetings = buildGreetings(ownerFirst)
+  const greeting = greetings[idx % greetings.length] || greetings[0]
   return (
     <div className="h-full w-full flex flex-col items-center justify-center px-6 animate-[fadeIn_0.6s_ease]">
       <div

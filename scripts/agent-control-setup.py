@@ -133,10 +133,13 @@ def write_json(path: Path, data: Any, dry_run: bool) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def prompt_text(label: str, default: str) -> str:
+def prompt_text(label: str, default: str, hint: str = "") -> str:
     print()
     print(paint(f"  {label}", "bold"))
-    value = input(paint(f"  [{default}] · Enter übernimmt: ", "dim")).strip()
+    if hint:
+        print(paint(f"  {hint}", "dim"))
+    print(paint(f"  Vorschlag: {default}", "dim"))
+    value = input(paint("  Enter übernimmt · oder eigener Text: ", "dim")).strip()
     return value or default
 
 
@@ -170,15 +173,18 @@ def prompt_yes_no(label: str, default: bool) -> bool:
     return raw in {"y", "yes", "j", "ja", "true", "1"}
 
 
-def prompt_multiline_default(label: str, default: str) -> str:
+def prompt_multiline_default(label: str, default: str, hint: str = "") -> str:
     """Frage mit langem Vorschlag, aufgeräumt dargestellt.
 
     Der Vorschlag wird lesbar in eigene, umgebrochene Zeilen gesetzt statt in
     die Eingabezeile gequetscht. So bleibt die Frage übersichtlich und der
-    Cursor steht an einer kurzen, klaren Eingabezeile.
+    Cursor steht an einer kurzen, klaren Eingabezeile. Eine optionale
+    Erklärzeile (hint) sagt in Laiensprache, was die Frage bewirkt.
     """
     print()
     print(paint(f"  {label}", "bold"))
+    if hint:
+        print(paint(f"  {hint}", "dim"))
     print(paint("  Vorschlag:", "dim"))
     for line in textwrap.wrap(default, width=64) or [""]:
         print(paint(f"    {line}", "dim"))
@@ -273,15 +279,38 @@ def collect_soul_answers(profile: dict[str, Any], yes: bool) -> dict[str, str]:
     defaults = soul_defaults(profile)
     if yes:
         return defaults
-    section("Agent-Profil", "Damit der Agent nicht neutral klingt, sondern zur Person oder Firma passt.")
-    return {
-        "agent_name": prompt_text("Agent-Name", defaults["agent_name"]),
-        "owner_name": prompt_text("Für wen arbeitet der Agent?", defaults["owner_name"]),
-        "role": prompt_multiline_default("Aufgabe in einem Satz", defaults["role"]),
-        "tone": prompt_multiline_default("Ton", defaults["tone"]),
-        "boundaries": prompt_multiline_default("Grenzen", defaults["boundaries"]),
-        "work_style": prompt_multiline_default("Arbeitsweise", defaults["work_style"]),
-    }
+    section(
+        "Schritt 2 von 2: Dein Agent",
+        "Vier kurze Fragen. Bei jeder steht ein Vorschlag. Mit Enter übernimmst du ihn.",
+    )
+    note("Du kannst alles später jederzeit ändern.")
+    # Grenzen und Arbeitsweise fragen wir bewusst nicht ab: sie sind für Laien
+    # schwer zu beurteilen und die sicheren Defaults passen fast immer. Sie
+    # fließen weiter in die Soul-Dateien ein, nur ohne eigene Frage.
+    answers = dict(defaults)
+    answers.update({
+        "agent_name": prompt_text(
+            "Wie soll dein Agent heißen?",
+            defaults["agent_name"],
+            hint="Der Name, mit dem er sich meldet und im Chat auftaucht.",
+        ),
+        "owner_name": prompt_text(
+            "Wie heißt du?",
+            defaults["owner_name"],
+            hint="Mit diesem Namen spricht dich dein Agent an.",
+        ),
+        "role": prompt_multiline_default(
+            "Wobei soll er dir helfen?",
+            defaults["role"],
+            hint="Seine Hauptaufgabe in einem Satz.",
+        ),
+        "tone": prompt_multiline_default(
+            "Wie soll er mit dir reden?",
+            defaults["tone"],
+            hint="Der Ton seiner Antworten.",
+        ),
+    })
+    return answers
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -779,27 +808,29 @@ def run(args: argparse.Namespace) -> int:
         instance_name = instance_name or "Agent Control"
         default_engine = default_engine or "codex"
     else:
-        if not profile_id:
-            section("Schritt 1 von 4: Profil", "Für Mila und Kunden ist client-basic der ruhige Standard.")
-            profile_id = choose(
-                "Welches Setup möchtest du?",
-                [(p["id"], p.get("label") or p["id"]) for p in cfg.get("profiles", [])],
-                default_profile,
-            )
+        # Profil wird nicht mehr als eigene Frage gestellt: für fast alle ist der
+        # ruhige Standard richtig. Wer ein anderes will, gibt --profile mit.
+        profile_id = profile_id or default_profile
         if profile_id not in profiles:
             raise SystemExit(f"Unknown profile: {profile_id}")
         profile = profiles[profile_id]
-        section("Schritt 2 von 4: Name")
-        instance_name = instance_name or prompt_text("Name dieser Installation", "Agent Control")
+
+        section("Schritt 1 von 2: Engine", "Das ist das Modell, das hinter dem Chat denkt.")
         default_engine = default_engine or choose(
-            "Schritt 3 von 4: Welche Engine soll den Chat starten?",
+            "Womit soll dein Agent denken?",
             [(p["id"], p.get("label") or p["id"]) for p in cfg.get("engine_profiles", [])],
             "codex",
         )
-        section("Schritt 4 von 4: Optionale Module")
-        for module_name in profile.get("optional_modules") or []:
-            if prompt_yes_no(f"{module_name} aktivieren", False):
-                optional_enabled.add(module_name)
+
+        # Optionale Module nur anbieten, wenn das Profil welche kennt. Sonst still.
+        optional_for_profile = profile.get("optional_modules") or []
+        if optional_for_profile:
+            section("Zusatz-Module", "Optional. Im Zweifel einfach mit Enter überspringen.")
+            for module_name in optional_for_profile:
+                if prompt_yes_no(f"{module_name} aktivieren?", False):
+                    optional_enabled.add(module_name)
+
+        instance_name = instance_name or "Agent Control"
 
     if profile_id not in profiles:
         raise SystemExit(f"Unknown profile: {profile_id}")

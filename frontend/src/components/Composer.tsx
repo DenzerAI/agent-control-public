@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowUp, Square, X, Plus, Paperclip, FileText, Image, Mic, Play, Pause, Lightbulb, Brain, Settings as SettingsIcon, Trash2, Hourglass, Check, Keyboard, ChevronDown, MessagesSquare, Inbox, Search, RotateCw, Target, MonitorSmartphone, HeartPulse, ClipboardPaste, PhoneOff, Sun, Moon, Hammer } from 'lucide-react'
 import { getThemeMode, setThemeMode, resolveTheme } from '../theme'
-import { getAgents, useMainAgentName, type Engine } from '../agents'
+import { getAgents, useMainAgentName, ownerFirstName, type Engine } from '../agents'
 import { useVoiceState, type VoiceState } from './voiceState'
 import KlausVoiceOrb from './KlausVoiceOrb'
 import { playUISound } from '../uiSounds'
@@ -329,12 +329,16 @@ function pickLine(lines: string[], seed: string): string {
 }
 
 function mobileMenuGreeting(phase: ReturnType<typeof dayPhase>, seed: string): string {
+  // Anrede mit dem Inhaber-Vornamen aus config/agents.json. Ohne gesetzten
+  // Namen fallen die personalisierten Varianten weg, der Rest bleibt neutral.
+  const name = ownerFirstName().trim()
+  const named = (greeting: string) => name ? greeting.replace('{name}', name) : ''
   const greetings = phase === 'morning'
-    ? ['', 'Moin,', 'Moin Christian,', 'Hey,']
+    ? ['', 'Moin,', named('Moin {name},'), 'Hey,']
     : phase === 'evening' || phase === 'night'
-      ? ['', 'Naabend Christian,', 'Guten Abend,', 'Hey mein Lieber,']
-      : ['', 'Hey Christian,', 'Hey,', 'Na mein Lieber,']
-  return pickLine(greetings, `${seed}:greeting`)
+      ? ['', named('Naabend {name},'), 'Guten Abend,', 'Hey mein Lieber,']
+      : ['', named('Hey {name},'), 'Hey,', 'Na mein Lieber,']
+  return pickLine(greetings.filter((g, i) => i === 0 || g !== ''), `${seed}:greeting`)
 }
 
 function menuLineWithGreeting(lines: string[], seed: string, phase: ReturnType<typeof dayPhase>): string {

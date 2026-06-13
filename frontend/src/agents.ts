@@ -33,13 +33,24 @@ const FALLBACK: AgentConfig[] = [
 // vergebenen Namen (Default-Platzhalter "Agent").
 const _nameSubs = new Set<() => void>()
 
+// ── Inhaber-Name ────────────────────────────────────────────────────────────
+// Der Mensch hinter dem Agenten. Kommt aus config/agents.json (Backend
+// /api/agents -> owner). Begruessungen ziehen den Vornamen hierueber, statt
+// einen Namen fest zu verdrahten. Leer, bis /api/agents geladen ist.
+let _ownerFirstName = ''
+
 /** Aktueller Anzeigename des Haupt-Agenten ('main'). */
 export function mainAgentName(): string {
   const main = (_agents.length > 0 ? _agents : FALLBACK).find(a => a.id === 'main')
   return main?.name || FALLBACK[0].name
 }
 
-/** Auf Aenderungen des Agent-Namens hoeren (fuer React-Hook). */
+/** Vorname des Inhabers aus config/agents.json, oder '' falls nicht gesetzt. */
+export function ownerFirstName(): string {
+  return _ownerFirstName
+}
+
+/** Auf Aenderungen von Agent- oder Inhaber-Namen hoeren (fuer React-Hook). */
 export function subscribeAgents(cb: () => void): () => void {
   _nameSubs.add(cb)
   return () => { _nameSubs.delete(cb) }
@@ -50,18 +61,28 @@ export function useMainAgentName(): string {
   return useSyncExternalStore(subscribeAgents, mainAgentName, mainAgentName)
 }
 
+/** React-Hook: liefert den Vornamen des Inhabers reaktiv (oder '' falls leer). */
+export function useOwnerFirstName(): string {
+  return useSyncExternalStore(subscribeAgents, ownerFirstName, ownerFirstName)
+}
+
 export async function loadAgents(): Promise<AgentConfig[]> {
   try {
     const res = await fetch('/api/agents')
     const data = await res.json()
-    _agents = Object.entries(data).map(([id, a]: [string, any]) => ({
-      id,
-      name: a.name,
-      color: a.color,
-      model: a.model || undefined,
-      sub: id !== 'main',
-      hidden: HIDDEN_AGENTS.has(id),
-    }))
+    // owner ist kein Agent-Eintrag, sondern der Inhaber-Block — getrennt halten.
+    const owner = (data && typeof data === 'object') ? data.owner : null
+    _ownerFirstName = (owner && (owner.first_name || owner.name)) ? String(owner.first_name || owner.name) : ''
+    _agents = Object.entries(data)
+      .filter(([id]) => id !== 'owner')
+      .map(([id, a]: [string, any]) => ({
+        id,
+        name: a.name,
+        color: a.color,
+        model: a.model || undefined,
+        sub: id !== 'main',
+        hidden: HIDDEN_AGENTS.has(id),
+      }))
   } catch {
     _agents = FALLBACK
   }
