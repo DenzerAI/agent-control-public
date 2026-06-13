@@ -111,11 +111,22 @@ async def ui_command(request: Request):
 
 @router.get("/api/agents")
 async def get_agents():
-    """Ein Agent: Klaus. Engine (codex|claude) wird pro Conversation gewaehlt."""
+    """Ein Agent. Engine (codex|claude) wird pro Conversation gewaehlt.
+
+    Liefert zusaetzlich den Inhaber-Namen (owner) mit, damit das Frontend
+    Begruessungen mit dem im Setup vergebenen Namen rendern kann, statt einen
+    fest verdrahteten Namen zu zeigen.
+    """
     from server import AGENTS
     a = AGENTS["main"]
+    try:
+        from backend.identity import get_owner
+    except ImportError:
+        from identity import get_owner
+    owner = get_owner()
     return JSONResponse({
-        "main": {"name": a["name"], "color": a["color"], "model": a.get("model", "")}
+        "main": {"name": a["name"], "color": a["color"], "model": a.get("model", "")},
+        "owner": {"name": owner.get("name", ""), "first_name": owner.get("first_name", "")},
     })
 
 

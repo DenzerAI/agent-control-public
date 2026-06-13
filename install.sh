@@ -367,6 +367,13 @@ wait_for_server() {
   return 1
 }
 
+# Der gesamte Ausführungsteil liegt in main(). Grund: bei 'curl | bash' liest
+# die Shell das Skript häppchenweise vom Pipe und führt es währenddessen aus.
+# Ein Unterprozess, der von stdin liest (z. B. der Homebrew-Installer), würde
+# sonst den noch ungelesenen Rest dieses Skripts wegschnappen, und der Lauf
+# bräche nach Homebrew einfach ab. Weil main() erst in der LETZTEN Zeile
+# aufgerufen wird, ist das ganze Skript bis dahin schon vollständig eingelesen.
+main() {
 PASSTHRU_ARGS=()
 for arg in "$@"; do
   case "$arg" in
@@ -481,3 +488,8 @@ rule
 echo "${C_DIM}  Ordner:        $DEST${C_RESET}"
 echo "${C_DIM}  Neu starten:   cd \"$DEST\" && bash scripts/start.sh${C_RESET}"
 echo
+}
+
+# Ganzes Skript ist jetzt eingelesen -> sicher ausführen, ohne dass ein
+# Unterprozess den Rest vom Pipe wegschnappen kann.
+main "$@"

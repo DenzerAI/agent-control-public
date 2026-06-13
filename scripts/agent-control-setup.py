@@ -14,6 +14,7 @@ import os
 import secrets
 import shutil
 import sys
+import textwrap
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -133,16 +134,19 @@ def write_json(path: Path, data: Any, dry_run: bool) -> None:
 
 
 def prompt_text(label: str, default: str) -> str:
-    value = input(paint(f"{label}", "bold") + paint(f" [{default}]: ", "dim")).strip()
+    print()
+    print(paint(f"  {label}", "bold"))
+    value = input(paint(f"  [{default}] · Enter übernimmt: ", "dim")).strip()
     return value or default
 
 
 def choose(label: str, options: list[tuple[str, str]], default: str) -> str:
-    print(paint(label, "bold"))
+    print()
+    print(paint(f"  {label}", "bold"))
     for idx, (value, text) in enumerate(options, start=1):
         mark = paint("  empfohlen", "gold") if value == default else ""
-        print(f"  {idx}. {text} {paint(f'({value})', 'dim')}{mark}")
-    raw = input(paint(f"Auswahl [{default}]: ", "dim")).strip()
+        print(f"    {idx}. {text} {paint(f'({value})', 'dim')}{mark}")
+    raw = input(paint(f"  Auswahl [{default}] · Enter übernimmt: ", "dim")).strip()
     if not raw:
         return default
     if raw.isdigit():
@@ -158,14 +162,28 @@ def choose(label: str, options: list[tuple[str, str]], default: str) -> str:
 
 def prompt_yes_no(label: str, default: bool) -> bool:
     suffix = "Y/n" if default else "y/N"
-    raw = input(paint(f"{label}", "bold") + paint(f" [{suffix}]: ", "dim")).strip().lower()
+    print()
+    print(paint(f"  {label}", "bold"))
+    raw = input(paint(f"  [{suffix}] · Enter übernimmt: ", "dim")).strip().lower()
     if not raw:
         return default
     return raw in {"y", "yes", "j", "ja", "true", "1"}
 
 
 def prompt_multiline_default(label: str, default: str) -> str:
-    return prompt_text(label, default)
+    """Frage mit langem Vorschlag, aufgeräumt dargestellt.
+
+    Der Vorschlag wird lesbar in eigene, umgebrochene Zeilen gesetzt statt in
+    die Eingabezeile gequetscht. So bleibt die Frage übersichtlich und der
+    Cursor steht an einer kurzen, klaren Eingabezeile.
+    """
+    print()
+    print(paint(f"  {label}", "bold"))
+    print(paint("  Vorschlag:", "dim"))
+    for line in textwrap.wrap(default, width=64) or [""]:
+        print(paint(f"    {line}", "dim"))
+    value = input(paint("  Enter übernimmt · oder eigener Text: ", "dim")).strip()
+    return value or default
 
 
 def load_profiles() -> dict[str, Any]:

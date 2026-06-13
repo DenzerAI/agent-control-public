@@ -35,9 +35,7 @@ export const HOLIDAYS_DE: Record<string, string> = {
 // gerendert: gestreifter Hintergrund, warm-orange Label.
 export const VACATIONS: Record<string, string> = (() => {
   const out: Record<string, string> = {}
-  const ranges: [string, string][] = [
-    ['2026-06-08', '2026-06-21'],
-  ]
+  const ranges: [string, string][] = []
   for (const [from, to] of ranges) {
     const d = new Date(from + 'T00:00:00')
     const end = new Date(to + 'T00:00:00')
